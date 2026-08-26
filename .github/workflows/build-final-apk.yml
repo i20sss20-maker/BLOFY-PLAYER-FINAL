@@ -1,0 +1,90 @@
+name: Build BLOFY FINAL APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: blofy-final-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BLOFY_BASE_URL: https://blofy-player-2026-production.up.railway.app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rebuild source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat source/BLOFY-ANDROID-2026.zip.part-* > BLOFY-ANDROID-2026-clean.zip
+          unzip -t BLOFY-ANDROID-2026-clean.zip
+          unzip -q BLOFY-ANDROID-2026-clean.zip
+          test -f BLOFY-ANDROID-2026/app/build.gradle.kts
+          grep -q 'versionCode = 332' BLOFY-ANDROID-2026/app/build.gradle.kts
+          grep -q 'AdaptivePlaybackController' BLOFY-ANDROID-2026/app/src/main/java/tv/blofy/player/PlayerActivity.java
+          grep -q 'PlaybackDiagnostics' BLOFY-ANDROID-2026/app/src/main/java/tv/blofy/player/PlayerActivity.java
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Create Gradle wrapper
+        working-directory: BLOFY-ANDROID-2026
+        run: gradle wrapper --gradle-version 8.13
+
+      - name: Unit tests
+        working-directory: BLOFY-ANDROID-2026
+        run: ./gradlew --no-daemon testDebugUnitTest -PBLOFY_BASE_URL="$BLOFY_BASE_URL"
+
+      - name: Build release APK
+        working-directory: BLOFY-ANDROID-2026
+        run: ./gradlew --no-daemon assembleRelease -PBLOFY_BASE_URL="$BLOFY_BASE_URL"
+
+      - name: Sign and verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="BLOFY-ANDROID-2026/app/build/outputs/apk/release/app-release-unsigned.apk"
+          test -s "$APK"
+          BUILD_TOOLS="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          keytool -genkeypair -v -keystore /tmp/blofy-final.jks -storepass blofyfinal332 -keypass blofyfinal332 -alias blofy-final -keyalg RSA -keysize 3072 -validity 3650 -dname 'CN=BLOFY PLAYER FINAL, O=BLOFY, C=SA'
+          "$BUILD_TOOLS/zipalign" -f -p 4 "$APK" /tmp/BLOFY-PLAYER-FINAL-v332-aligned.apk
+          "$BUILD_TOOLS/apksigner" sign --ks /tmp/blofy-final.jks --ks-pass pass:blofyfinal332 --key-pass pass:blofyfinal332 --ks-key-alias blofy-final --out BLOFY-PLAYER-FINAL-v332-TEST-SIGNED.apk /tmp/BLOFY-PLAYER-FINAL-v332-aligned.apk
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs BLOFY-PLAYER-FINAL-v332-TEST-SIGNED.apk
+          sha256sum BLOFY-PLAYER-FINAL-v332-TEST-SIGNED.apk > BLOFY-PLAYER-FINAL-v332-TEST-SIGNED.apk.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BLOFY-PLAYER-FINAL-v332-TEST-SIGNED
+          path: |
+            BLOFY-PLAYER-FINAL-v332-TEST-SIGNED.apk
+            BLOFY-PLAYER-FINAL-v332-TEST-SIGNED.apk.sha256
+          if-no-files-found: error
+
+      - name: Publish test release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="v332-final-test"
+          gh release delete "$TAG" --yes --cleanup-tag >/dev/null 2>&1 || true
+          gh release create "$TAG" --target "$GITHUB_SHA" --title 'BLOFY PLAYER FINAL v332 TEST' --notes 'Signed v332 test build from the clean BLOFY-PLAYER-FINAL repository.' --prerelease BLOFY-PLAYER-FINAL-v332-TEST-SIGNED.apk BLOFY-PLAYER-FINAL-v332-TEST-SIGNED.apk.sha256
