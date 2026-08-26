@@ -15,7 +15,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     env:
       BLOFY_BASE_URL: https://blofy-player-2026-production.up.railway.app
     steps:
@@ -29,6 +29,23 @@ jobs:
           ref: v332-adaptive-playback-ui
           path: source-repo
 
+      - name: Apply v329 to v332 patches
+        working-directory: source-repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/apply_v329_hotfix.py
+          python3 tools/apply_v330_hotfix.py
+          python3 tools/apply_v330_vod_fix.py
+          python3 tools/apply_v330_compile_fix.py
+          python3 tools/apply_v331_precompat.py
+          python3 tools/apply_v331_transport_manager.py
+          python3 tools/apply_v331_compile_fix.py
+          python3 tools/apply_v332_adaptive.py
+          python3 tools/apply_v332_controller_bridge.py
+          python3 tools/apply_v332_ui.py
+          python3 tools/apply_v332_error_guard.py
+
       - name: Verify v332 source
         shell: bash
         run: |
@@ -37,6 +54,7 @@ jobs:
           grep -q 'versionCode = 332' source-repo/BLOFY-ANDROID-2026/app/build.gradle.kts
           grep -q 'AdaptivePlaybackController' source-repo/BLOFY-ANDROID-2026/app/src/main/java/tv/blofy/player/PlayerActivity.java
           grep -q 'PlaybackDiagnostics' source-repo/BLOFY-ANDROID-2026/app/src/main/java/tv/blofy/player/PlayerActivity.java
+          grep -q 'تشخيص التشغيل المتقدم' source-repo/BLOFY-ANDROID-2026/app/src/main/java/tv/blofy/player/SettingsActivity.java
 
       - name: Java 17
         uses: actions/setup-java@v4
@@ -91,4 +109,4 @@ jobs:
           set -euo pipefail
           TAG="v332-final-test"
           gh release delete "$TAG" --yes --cleanup-tag >/dev/null 2>&1 || true
-          gh release create "$TAG" --target "$GITHUB_SHA" --title 'BLOFY PLAYER FINAL v332 TEST' --notes 'Signed v332 test build from the clean BLOFY-PLAYER-FINAL repository.' --prerelease BLOFY-PLAYER-FINAL-v332-TEST-SIGNED.apk BLOFY-PLAYER-FINAL-v332-TEST-SIGNED.apk.sha256
+          gh release create "$TAG" --target "$GITHUB_SHA" --title 'BLOFY PLAYER FINAL v332 TEST' --notes 'Signed v332 test build from BLOFY-PLAYER-FINAL.' --prerelease BLOFY-PLAYER-FINAL-v332-TEST-SIGNED.apk BLOFY-PLAYER-FINAL-v332-TEST-SIGNED.apk.sha256
