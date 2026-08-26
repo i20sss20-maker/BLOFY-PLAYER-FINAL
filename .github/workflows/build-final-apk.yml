@@ -37,7 +37,6 @@ jobs:
           python3 tools/apply_v332_adaptive.py
           python3 tools/apply_v332_controller_bridge.py
           python3 tools/apply_v332_ui.py
-          python3 tools/apply_v332_error_guard.py
 
       - name: Verify v332 source
         shell: bash
