@@ -71,6 +71,13 @@ jobs:
         working-directory: source-repo/BLOFY-ANDROID-2026
         run: ./gradlew --no-daemon assembleRelease -PBLOFY_BASE_URL="$BLOFY_BASE_URL"
 
+      - name: Upload unsigned APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: BLOFY-PLAYER-FINAL-v332-UNSIGNED
+          path: source-repo/BLOFY-ANDROID-2026/app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+
       - name: Sign and verify APK
         shell: bash
         run: |
