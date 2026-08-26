@@ -29,7 +29,7 @@ jobs:
           ref: v332-adaptive-playback-ui
           path: source-repo
 
-      - name: Apply v329 to v332 patches
+      - name: Apply compatibility baseline and v332
         working-directory: source-repo
         shell: bash
         run: |
@@ -39,8 +39,8 @@ jobs:
           python3 tools/apply_v330_vod_fix.py
           python3 tools/apply_v330_compile_fix.py
           python3 tools/apply_v331_precompat.py
-          python3 tools/apply_v331_transport_manager.py
-          python3 tools/apply_v331_compile_fix.py
+          # v332 replaces v331_transport_manager inside PlayerActivity.
+          # Running both causes two managers to patch the same blocks.
           python3 tools/apply_v332_adaptive.py
           python3 tools/apply_v332_controller_bridge.py
           python3 tools/apply_v332_ui.py
